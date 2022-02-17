@@ -1207,6 +1207,14 @@ export class OpenSeaPort {
     const { buy, sell } = assignOrdersToSides(order, matchingOrder);
 
     const metadata = this._getMetadata(order, referrerAddress);
+    const result = await this.custom_atomicMatch({
+      buy,
+      sell,
+      accountAddress,
+      metadata,
+    });
+    return result;
+    /*
     const transactionHash = await this._atomicMatch({
       buy,
       sell,
@@ -1224,6 +1232,7 @@ export class OpenSeaPort {
       }
     );
     return transactionHash;
+    */
   }
 
   /**
@@ -4052,6 +4061,7 @@ export class OpenSeaPort {
     return undefined;
   }
 
+  // @ts-expect-error unused
   private async _atomicMatch({
     buy,
     sell,
@@ -4243,6 +4253,204 @@ export class OpenSeaPort {
         }..."`
       );
     }
+    return { args, txnData };
+    return txHash;
+  }
+
+  private async custom_atomicMatch({
+    buy,
+    sell,
+    accountAddress,
+    metadata = NULL_BLOCK_HASH,
+  }: {
+    buy: Order;
+    sell: Order;
+    accountAddress: string;
+    metadata?: string;
+  }) {
+    let value;
+    let shouldValidateBuy = true;
+    let shouldValidateSell = true;
+    // Only check buy, but shouldn't matter as they should always be equal
+    // const wyvernProtocol = this._getWyvernProtocolForOrder(buy);
+    const wyvernProtocolReadOnly = this._getWyvernProtocolForOrder(buy, true);
+
+    if (sell.maker.toLowerCase() == accountAddress.toLowerCase()) {
+      // USER IS THE SELLER, only validate the buy order
+      await this._sellOrderValidationAndApprovals({
+        order: sell,
+        accountAddress,
+      });
+      shouldValidateSell = false;
+    } else if (buy.maker.toLowerCase() == accountAddress.toLowerCase()) {
+      // USER IS THE BUYER, only validate the sell order
+      await this._buyOrderValidationAndApprovals({
+        order: buy,
+        counterOrder: sell,
+        accountAddress,
+      });
+      shouldValidateBuy = false;
+
+      // If using ETH to pay, set the value of the transaction to the current price
+      if (buy.paymentToken == NULL_ADDRESS) {
+        value = await this._getRequiredAmountForTakingSellOrder(sell);
+      }
+    } else {
+      // User is neither - matching service
+    }
+
+    await this._validateMatch({
+      buy,
+      sell,
+      accountAddress,
+      shouldValidateBuy,
+      shouldValidateSell,
+    });
+
+    this._dispatch(EventType.MatchOrders, {
+      buy,
+      sell,
+      accountAddress,
+      matchMetadata: metadata,
+    });
+
+    let txHash;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const txnData: any = { from: accountAddress, value };
+    const args: WyvernAtomicMatchParameters = [
+      [
+        buy.exchange,
+        buy.maker,
+        buy.taker,
+        buy.feeRecipient,
+        buy.target,
+        buy.staticTarget,
+        buy.paymentToken,
+        sell.exchange,
+        sell.maker,
+        sell.taker,
+        sell.feeRecipient,
+        sell.target,
+        sell.staticTarget,
+        sell.paymentToken,
+      ],
+      [
+        buy.makerRelayerFee,
+        buy.takerRelayerFee,
+        buy.makerProtocolFee,
+        buy.takerProtocolFee,
+        buy.basePrice,
+        buy.extra,
+        buy.listingTime,
+        buy.expirationTime,
+        buy.salt,
+        sell.makerRelayerFee,
+        sell.takerRelayerFee,
+        sell.makerProtocolFee,
+        sell.takerProtocolFee,
+        sell.basePrice,
+        sell.extra,
+        sell.listingTime,
+        sell.expirationTime,
+        sell.salt,
+      ],
+      [
+        buy.feeMethod,
+        buy.side,
+        buy.saleKind,
+        buy.howToCall,
+        sell.feeMethod,
+        sell.side,
+        sell.saleKind,
+        sell.howToCall,
+      ],
+      buy.calldata,
+      sell.calldata,
+      buy.replacementPattern,
+      sell.replacementPattern,
+      buy.staticExtradata,
+      sell.staticExtradata,
+      [buy.v || 0, sell.v || 0],
+      [
+        buy.r || NULL_BLOCK_HASH,
+        buy.s || NULL_BLOCK_HASH,
+        sell.r || NULL_BLOCK_HASH,
+        sell.s || NULL_BLOCK_HASH,
+        metadata,
+      ],
+    ];
+
+    // Estimate gas first
+    try {
+      // Typescript splat doesn't typecheck
+      const gasEstimate =
+        await wyvernProtocolReadOnly.wyvernExchange.atomicMatch_.estimateGasAsync(
+          args[0],
+          args[1],
+          args[2],
+          args[3],
+          args[4],
+          args[5],
+          args[6],
+          args[7],
+          args[8],
+          args[9],
+          args[10],
+          txnData
+        );
+
+      txnData.gas = this._correctGasAmount(gasEstimate);
+    } catch (error) {
+      console.error(`Failed atomic match with args: `, args, error);
+      throw new Error(
+        `Oops, the Ethereum network rejected this transaction :( The OpenSea devs have been alerted, but this problem is typically due an item being locked or untransferrable. The exact error was "${
+          error instanceof Error
+            ? error.message.substr(0, MAX_ERROR_LENGTH)
+            : "unknown"
+        }..."`
+      );
+    }
+
+    // Then do the transaction
+    try {
+      this.logger(`Fulfilling order with gas set to ${txnData.gas}`);
+      /*
+      txHash =
+        await wyvernProtocol.wyvernExchange.atomicMatch_.sendTransactionAsync(
+          args[0],
+          args[1],
+          args[2],
+          args[3],
+          args[4],
+          args[5],
+          args[6],
+          args[7],
+          args[8],
+          args[9],
+          args[10],
+          txnData
+        );
+        */
+    } catch (error) {
+      console.error(error);
+
+      this._dispatch(EventType.TransactionDenied, {
+        error,
+        buy,
+        sell,
+        accountAddress,
+        matchMetadata: metadata,
+      });
+
+      throw new Error(
+        `Failed to authorize transaction: "${
+          error instanceof Error && error.message
+            ? error.message
+            : "user denied"
+        }..."`
+      );
+    }
+    return { args, txnData };
     return txHash;
   }
 
