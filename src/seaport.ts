@@ -4242,7 +4242,8 @@ export class OpenSeaPort {
   }
 
   private async _getRequiredAmountForTakingSellOrder(sell: Order) {
-    const currentPrice = await this.getCurrentPrice(sell);
+    // const currentPrice = await this.getCurrentPrice(sell);
+    const currentPrice = 0;
     const estimatedPrice = estimateCurrentPrice(sell);
 
     const maxPrice = BigNumber.max(currentPrice, estimatedPrice);
