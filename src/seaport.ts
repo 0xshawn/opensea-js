@@ -4076,11 +4076,13 @@ export class OpenSeaPort {
       shouldValidateSell = false;
     } else if (buy.maker.toLowerCase() == accountAddress.toLowerCase()) {
       // USER IS THE BUYER, only validate the sell order
+      /*
       await this._buyOrderValidationAndApprovals({
         order: buy,
         counterOrder: sell,
         accountAddress,
       });
+      */
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       shouldValidateBuy = false;
 
