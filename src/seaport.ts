@@ -65,6 +65,7 @@ import {
   UniswapExchange,
 } from "./contracts";
 import {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   MAX_ERROR_LENGTH,
   requireOrderCalldataCanMatch,
   requireOrdersCanMatch,
@@ -4176,6 +4177,7 @@ export class OpenSeaPort {
     ];
 
     // Estimate gas first
+    /*
     try {
       // Typescript splat doesn't typecheck
       const gasEstimate = await this._wyvernProtocolReadOnly.wyvernExchange
@@ -4205,6 +4207,7 @@ export class OpenSeaPort {
         }..."`
       );
     }
+     */
 
     // Then do the transaction
     try {
