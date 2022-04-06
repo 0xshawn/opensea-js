@@ -4110,7 +4110,6 @@ export class OpenSeaPort {
       matchMetadata: metadata,
     });
 
-    let txHash;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const txnData: any = { from: accountAddress, value };
     const args: WyvernAtomicMatchParameters = [
@@ -4210,43 +4209,22 @@ export class OpenSeaPort {
      */
 
     // Then do the transaction
-    try {
-      this.logger(`Fulfilling order with gas set to ${txnData.gas}`);
-      txHash = await this._wyvernProtocol.wyvernExchange
-        .atomicMatch_(
-          args[0],
-          args[1],
-          args[2],
-          args[3],
-          args[4],
-          args[5],
-          args[6],
-          args[7],
-          args[8],
-          args[9],
-          args[10]
-        )
-        .sendTransactionAsync(txnData);
-    } catch (error) {
-      console.error(error);
-
-      this._dispatch(EventType.TransactionDenied, {
-        error,
-        buy,
-        sell,
-        accountAddress,
-        matchMetadata: metadata,
-      });
-
-      throw new Error(
-        `Failed to authorize transaction: "${
-          error instanceof Error && error.message
-            ? error.message
-            : "user denied"
-        }..."`
-      );
-    }
-    return txHash;
+    this.logger(`Fulfilling order with gas set to ${txnData.gas}`);
+    return await this._wyvernProtocol.wyvernExchange
+      .atomicMatch_(
+        args[0],
+        args[1],
+        args[2],
+        args[3],
+        args[4],
+        args[5],
+        args[6],
+        args[7],
+        args[8],
+        args[9],
+        args[10]
+      )
+      .sendTransactionAsync(txnData);
   }
 
   private async _getRequiredAmountForTakingSellOrder(sell: Order) {
