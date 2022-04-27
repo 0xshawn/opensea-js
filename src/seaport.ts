@@ -652,7 +652,6 @@ export class OpenSeaPort {
 
   /**
    * Create a buy order to make an offer on a bundle or group of assets.
-   * Will throw an 'Insufficient balance' error if the maker doesn't have enough W-ETH to make the offer.
    * If the user hasn't approved W-ETH access yet, this will emit `ApproveCurrency` before asking for approval.
    * @param param0 __namedParameters Object
    * @param assets Array of Asset objects to bid on
@@ -735,7 +734,6 @@ export class OpenSeaPort {
 
   /**
    * Create a buy order to make an offer on an asset.
-   * Will throw an 'Insufficient balance' error if the maker doesn't have enough W-ETH to make the offer.
    * If the user hasn't approved W-ETH access yet, this will emit `ApproveCurrency` before asking for approval.
    * @param param0 __namedParameters Object
    * @param asset The asset to trade
@@ -3632,29 +3630,12 @@ export class OpenSeaPort {
     const tokenAddress = order.paymentToken;
 
     if (tokenAddress != NULL_ADDRESS) {
-      const balance = await this.getTokenBalance({
-        accountAddress,
-        tokenAddress,
-      });
-
       /* NOTE: no buy-side auctions for now, so sell.saleKind === 0 */
       let minimumAmount = makeBigNumber(order.basePrice);
       if (counterOrder) {
         minimumAmount = await this._getRequiredAmountForTakingSellOrder(
           counterOrder
         );
-      }
-
-      // Check WETH balance
-      if (balance.toNumber() < minimumAmount.toNumber()) {
-        if (
-          tokenAddress ==
-          WyvernSchemas.tokens[this._networkName].canonicalWrappedEther.address
-        ) {
-          throw new Error("Insufficient balance. You may need to wrap Ether.");
-        } else {
-          throw new Error("Insufficient balance.");
-        }
       }
 
       // Check token approval
@@ -4328,11 +4309,13 @@ export class OpenSeaPort {
   }
 
   private _getSchemaName(asset: Asset | OpenSeaAsset) {
-    if ("assetContract" in asset) {
+    if (asset.schemaName) {
+      return asset.schemaName;
+    } else if ("assetContract" in asset) {
       return asset.assetContract.schemaName;
     }
 
-    return asset.schemaName;
+    return undefined;
   }
 
   private _getSchema(schemaName?: WyvernSchemaName): Schema<WyvernAsset> {
