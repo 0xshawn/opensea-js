@@ -1170,15 +1170,24 @@ export class OpenSeaPort {
     recipientAddress?: string;
     referrerAddress?: string;
   }): Promise<string> {
+    let date = new Date();
+    console.log("fulfillOrder", date, date.getMilliseconds());
     const matchingOrder = this._makeMatchingOrder({
       order,
       accountAddress,
       recipientAddress: recipientAddress || accountAddress,
     });
+    date = new Date();
+    console.log("this._makeMatchingOrder", date, date.getMilliseconds());
 
     const { buy, sell } = assignOrdersToSides(order, matchingOrder);
+    date = new Date();
+    console.log("assignOrdersToSides", date, date.getMilliseconds());
 
     const metadata = this._getMetadata(order, referrerAddress);
+    date = new Date();
+    console.log("assignOrdersToSides", date, date.getMilliseconds());
+
     const transactionHash = await this._atomicMatch({
       buy,
       sell,
