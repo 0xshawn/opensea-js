@@ -1169,42 +1169,40 @@ export class OpenSeaPort {
     accountAddress: string;
     recipientAddress?: string;
     referrerAddress?: string;
-  }): Promise<string> {
-    let date = new Date();
-    console.log("fulfillOrder", date, date.getMilliseconds());
+  }) {
     const matchingOrder = this._makeMatchingOrder({
       order,
       accountAddress,
       recipientAddress: recipientAddress || accountAddress,
     });
-    date = new Date();
-    console.log("this._makeMatchingOrder", date, date.getMilliseconds());
 
     const { buy, sell } = assignOrdersToSides(order, matchingOrder);
-    date = new Date();
-    console.log("assignOrdersToSides", date, date.getMilliseconds());
-
     const metadata = this._getMetadata(order, referrerAddress);
-    date = new Date();
-    console.log("assignOrdersToSides", date, date.getMilliseconds());
 
-    const transactionHash = await this._atomicMatch({
+    // const transactionHash = await this._atomicMatch({
+    //   buy,
+    //   sell,
+    //   accountAddress,
+    //   metadata,
+    // });
+    const object = await this._atomicMatch({
       buy,
       sell,
       accountAddress,
       metadata,
     });
+    return object;
 
-    await this._confirmTransaction(
-      transactionHash,
-      EventType.MatchOrders,
-      "Fulfilling order",
-      async () => {
-        const isOpen = await this._validateOrder(order);
-        return !isOpen;
-      }
-    );
-    return transactionHash;
+    // await this._confirmTransaction(
+    //   transactionHash,
+    //   EventType.MatchOrders,
+    //   "Fulfilling order",
+    //   async () => {
+    //     const isOpen = await this._validateOrder(order);
+    //     return !isOpen;
+    //   }
+    // );
+    // return transactionHash;
   }
 
   /**
@@ -4055,7 +4053,6 @@ export class OpenSeaPort {
     let value;
     let shouldValidateBuy = true;
     let shouldValidateSell = true;
-
     // Only check buy, but shouldn't matter as they should always be equal
     if (sell.maker.toLowerCase() == accountAddress.toLowerCase()) {
       // USER IS THE SELLER, only validate the buy order
@@ -4099,8 +4096,6 @@ export class OpenSeaPort {
       accountAddress,
       matchMetadata: metadata,
     });
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const txnData: any = { from: accountAddress, value };
     const args: WyvernAtomicMatchParameters = [
       [
@@ -4198,9 +4193,7 @@ export class OpenSeaPort {
     }
      */
 
-    // Then do the transaction
-    this.logger(`Fulfilling order with gas set to ${txnData.gas}`);
-    return await this._wyvernProtocol.wyvernExchange
+    const encoded = this._wyvernProtocolReadOnly.wyvernExchange
       .atomicMatch_(
         args[0],
         args[1],
@@ -4214,7 +4207,28 @@ export class OpenSeaPort {
         args[9],
         args[10]
       )
-      .sendTransactionAsync(txnData);
+      .getABIEncodedTransactionData();
+    // // Then do the transaction
+    // this.logger(`Fulfilling order with gas set to ${txnData.gas}`);
+    // const encoded = this._wyvernProtocol.wyvernExchange
+    //   .atomicMatch_(
+    //     args[0],
+    //     args[1],
+    //     args[2],
+    //     args[3],
+    //     args[4],
+    //     args[5],
+    //     args[6],
+    //     args[7],
+    //     args[8],
+    //     args[9],
+    //     args[10]
+    //   )
+    //   .sendTransactionAsync(txnData);
+    return {
+      encoded,
+      txnData,
+    };
   }
 
   private async _getRequiredAmountForTakingSellOrder(sell: Order) {
