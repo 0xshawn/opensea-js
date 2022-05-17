@@ -763,7 +763,8 @@ export class OpenSeaPort {
     paymentTokenAddress?: string;
     sellOrder?: Order;
     referrerAddress?: string;
-  }): Promise<Order> {
+  }) {
+    // }): Promise<Order> {
     paymentTokenAddress =
       paymentTokenAddress ||
       WyvernSchemas.tokens[this._networkName].canonicalWrappedEther.address;
@@ -803,7 +804,8 @@ export class OpenSeaPort {
       ...hashedOrder,
       ...signature,
     };
-    return this.validateAndPostOrder(orderWithSignature);
+    return orderToJSON(orderWithSignature);
+    // return this.validateAndPostOrder(orderWithSignature);
   }
 
   /**
