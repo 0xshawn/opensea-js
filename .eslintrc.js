@@ -23,7 +23,7 @@ module.exports = {
     "no-restricted-globals": ["error"].concat(restrictedGlobals),
     curly: ["error"],
     "@typescript-eslint/no-unused-vars": [
-      "error",
+      "off",
       { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
     ],
     "@typescript-eslint/explicit-module-boundary-types": "off",

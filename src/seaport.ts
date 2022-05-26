@@ -65,7 +65,6 @@ import {
   UniswapExchange,
 } from "./contracts";
 import {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   MAX_ERROR_LENGTH,
   requireOrderCalldataCanMatch,
   requireOrdersCanMatch,
@@ -806,6 +805,63 @@ export class OpenSeaPort {
     };
     return orderToJSON(orderWithSignature);
     // return this.validateAndPostOrder(orderWithSignature);
+  }
+
+  public async createBuyOrderViaPrivateKey({
+    asset,
+    accountAddress,
+    startAmount,
+    quantity = 1,
+    expirationTime = getMaxOrderExpirationTimestamp(),
+    paymentTokenAddress,
+    sellOrder,
+    referrerAddress,
+  }: {
+    asset: Asset;
+    accountAddress: string;
+    startAmount: number;
+    quantity?: number;
+    expirationTime?: number;
+    paymentTokenAddress?: string;
+    sellOrder?: Order;
+    referrerAddress?: string;
+  }) {
+    // }): Promise<Order> {
+    console.log(">>> createBuyOrder", 5);
+    paymentTokenAddress =
+      paymentTokenAddress ||
+      WyvernSchemas.tokens[this._networkName].canonicalWrappedEther.address;
+    if (!paymentTokenAddress) {
+      throw new Error("Payment token required");
+    }
+
+    const order = await this._makeBuyOrder({
+      asset,
+      quantity,
+      accountAddress,
+      startAmount,
+      expirationTime,
+      paymentTokenAddress,
+      extraBountyBasisPoints: 0,
+      sellOrder,
+      referrerAddress,
+    });
+
+    // NOTE not in Wyvern exchange code:
+    // frontend checks to make sure
+    // token is approved and sufficiently available
+    await this._buyOrderValidationAndApprovals({ order, accountAddress });
+    const hashedOrder = {
+      ...order,
+      hash: getOrderHash(order),
+    };
+    try {
+      const { message, nonce } = await this.authorizeOrderNoSign(hashedOrder);
+      return { message, nonce, hashedOrder };
+    } catch (error) {
+      console.error(error);
+      throw new Error("You declined to authorize your offer");
+    }
   }
 
   /**
@@ -4062,7 +4118,7 @@ export class OpenSeaPort {
         order: sell,
         accountAddress,
       });
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
       shouldValidateSell = false;
     } else if (buy.maker.toLowerCase() == accountAddress.toLowerCase()) {
       // USER IS THE BUYER, only validate the sell order
@@ -4073,7 +4129,7 @@ export class OpenSeaPort {
         accountAddress,
       });
       */
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
       shouldValidateBuy = false;
 
       // If using ETH to pay, set the value of the transaction to the current price
@@ -4263,9 +4319,8 @@ export class OpenSeaPort {
    * @param order Unsigned wyvern order
    * @returns order signature in the form of v, r, s, also an optional nonce
    */
-  public async authorizeOrder(
-    order: UnsignedOrder
-  ): Promise<(ECSignature & { nonce?: number }) | null> {
+  public async authorizeOrder(order: UnsignedOrder) {
+    // ): Promise<(ECSignature & { nonce?: number }) | null> {
     const signerAddress = order.maker;
 
     this._dispatch(EventType.CreateOrder, {
@@ -4324,6 +4379,70 @@ export class OpenSeaPort {
         signerAddress
       );
       return { ...ecSignature, nonce: signerOrderNonce.toNumber() };
+    } catch (error) {
+      this._dispatch(EventType.OrderDenied, {
+        order,
+        accountAddress: signerAddress,
+      });
+      throw error;
+    }
+  }
+
+  public async authorizeOrderNoSign(order: UnsignedOrder) {
+    // ): Promise<(ECSignature & { nonce?: number }) | null> {
+    const signerAddress = order.maker;
+
+    this._dispatch(EventType.CreateOrder, {
+      order,
+      accountAddress: order.maker,
+    });
+
+    try {
+      // 2.3 Sign order flow using EIP-712
+      const signerOrderNonce = await this.getNonce(signerAddress);
+
+      // We need to manually specify each field because OS orders can contain unrelated data
+      const orderForSigning: RawWyvernOrderJSON = {
+        maker: order.maker,
+        exchange: order.exchange,
+        taker: order.taker,
+        makerRelayerFee: order.makerRelayerFee.toString(),
+        takerRelayerFee: order.takerRelayerFee.toString(),
+        makerProtocolFee: order.makerProtocolFee.toString(),
+        takerProtocolFee: order.takerProtocolFee.toString(),
+        feeRecipient: order.feeRecipient,
+        feeMethod: order.feeMethod,
+        side: order.side,
+        saleKind: order.saleKind,
+        target: order.target,
+        howToCall: order.howToCall,
+        calldata: order.calldata,
+        replacementPattern: order.replacementPattern,
+        staticTarget: order.staticTarget,
+        staticExtradata: order.staticExtradata,
+        paymentToken: order.paymentToken,
+        basePrice: order.basePrice.toString(),
+        extra: order.extra.toString(),
+        listingTime: order.listingTime.toString(),
+        expirationTime: order.expirationTime.toString(),
+        salt: order.salt.toString(),
+      };
+
+      // We don't JSON.stringify as certain wallet providers sanitize this data
+      // https://github.com/coinbase/coinbase-wallet-sdk/issues/60
+      const message = {
+        types: EIP_712_ORDER_TYPES,
+        domain: {
+          name: EIP_712_WYVERN_DOMAIN_NAME,
+          version: EIP_712_WYVERN_DOMAIN_VERSION,
+          chainId: this._networkName == Network.Main ? 1 : 4,
+          verifyingContract: order.exchange,
+        },
+        primaryType: "Order",
+        message: { ...orderForSigning, nonce: signerOrderNonce.toNumber() },
+      };
+
+      return { message, nonce: signerOrderNonce.toNumber() };
     } catch (error) {
       this._dispatch(EventType.OrderDenied, {
         order,
