@@ -827,7 +827,6 @@ export class OpenSeaPort {
     referrerAddress?: string;
   }) {
     // }): Promise<Order> {
-    console.log(">>> createBuyOrder", 5);
     paymentTokenAddress =
       paymentTokenAddress ||
       WyvernSchemas.tokens[this._networkName].canonicalWrappedEther.address;
