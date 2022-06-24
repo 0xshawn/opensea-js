@@ -1550,6 +1550,29 @@ export class OpenSeaSDK {
     return transactionHash;
   }
 
+  public async fulfillOrderCG({
+    order,
+    accountAddress,
+    recipientAddress,
+  }: {
+    order: OrderV2;
+    accountAddress: string;
+    recipientAddress?: string;
+  }): Promise<any> {
+    switch (order.protocolAddress) {
+      case CROSS_CHAIN_SEAPORT_ADDRESS: {
+        const { actions, executeAllActions } = await this.seaport.fulfillOrder({
+          order: order.protocolData,
+          accountAddress,
+          recipientAddress,
+        });
+        return { actions, executeAllActions };
+      }
+      default:
+        throw new Error("Unsupported protocol");
+    }
+  }
+
   /**
    * Fullfill or "take" an order for an asset, either a buy or sell order
    * @param param0 __namedParamaters Object
