@@ -875,7 +875,7 @@ export class OpenSeaSDK {
    * @param options.expirationTime Expiration time for the order, in seconds
    * @param options.paymentTokenAddress Optional address for using an ERC-20 token in the order. If unspecified, defaults to WETH
    */
-  public async createBuyOrder({
+  public async createBuyOrderOrigin({
     asset,
     accountAddress,
     startAmount,
@@ -940,6 +940,71 @@ export class OpenSeaSDK {
     const order = await executeAllActions();
 
     return this.api.postOrder(order, { protocol: "seaport", side: "bid" });
+  }
+
+  public async createBuyOrder({
+    asset,
+    accountAddress,
+    startAmount,
+    quantity = 1,
+    expirationTime,
+    paymentTokenAddress,
+  }: {
+    asset: Asset;
+    accountAddress: string;
+    startAmount: BigNumberInput;
+    quantity?: BigNumberInput;
+    expirationTime?: BigNumberInput;
+    paymentTokenAddress?: string;
+  }): Promise<any> {
+    if (!asset.tokenId) {
+      throw new Error("Asset must have a tokenId");
+    }
+    paymentTokenAddress =
+      paymentTokenAddress ?? WETH_ADDRESS_BY_NETWORK[this._networkName];
+
+    const openseaAsset = await this.api.getAsset(asset);
+    const considerationAssetItems = this.getAssetItems(
+      [openseaAsset],
+      [makeBigNumber(quantity)]
+    );
+
+    const { basePrice } = await this._getPriceParameters(
+      OrderSide.Buy,
+      paymentTokenAddress,
+      makeBigNumber(expirationTime ?? getMaxOrderExpirationTimestamp()),
+      makeBigNumber(startAmount)
+    );
+
+    const { openseaSellerFee, collectionSellerFee } = await this.getFees({
+      openseaAsset,
+      paymentTokenAddress,
+      startAmount: basePrice,
+    });
+    const considerationFeeItems = [
+      openseaSellerFee,
+      collectionSellerFee,
+    ].filter((item): item is ConsiderationInputItem => item !== undefined);
+
+    const { actions, executeAllActions } = await this.seaport.createOrder(
+      {
+        offer: [
+          {
+            token: paymentTokenAddress,
+            amount: basePrice.toString(),
+          },
+        ],
+        consideration: [...considerationAssetItems, ...considerationFeeItems],
+        endTime:
+          expirationTime?.toString() ??
+          getMaxOrderExpirationTimestamp().toString(),
+        zone: DEFAULT_ZONE_BY_NETWORK[this._networkName],
+        restrictedByZone: true,
+        allowPartialFills: true,
+      },
+      accountAddress
+    );
+    return { actions, executeAllActions };
   }
 
   /**
