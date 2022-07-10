@@ -963,7 +963,12 @@ export class OpenSeaSDK {
     paymentTokenAddress =
       paymentTokenAddress ?? WETH_ADDRESS_BY_NETWORK[this._networkName];
 
-    const openseaAsset = await this.api.getAsset(asset);
+    let openseaAsset;
+    if (asset.name !== undefined) {
+      openseaAsset = asset as OpenSeaAsset;
+    } else {
+      openseaAsset = await this.api.getAsset(asset);
+    }
     const considerationAssetItems = this.getAssetItems(
       [openseaAsset],
       [makeBigNumber(quantity)]
@@ -4556,7 +4561,7 @@ export class OpenSeaSDK {
     endAmount?: BigNumber,
     waitingForBestCounterOrder = false,
     englishAuctionReservePrice?: BigNumber
-  ) {
+  ): Promise<any> {
     const priceDiff =
       endAmount != null ? startAmount.minus(endAmount) : new BigNumber(0);
     const paymentToken = tokenAddress.toLowerCase();
