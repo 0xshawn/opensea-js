@@ -969,7 +969,7 @@ export class OpenSeaSDK {
       [makeBigNumber(quantity)]
     );
 
-    const { basePrice } = await this._getPriceParameters(
+    const { basePrice } = await this._getPriceParametersCG(
       OrderSide.Buy,
       paymentTokenAddress,
       makeBigNumber(expirationTime ?? getMaxOrderExpirationTimestamp()),
@@ -4565,6 +4565,77 @@ export class OpenSeaSDK {
       address: paymentToken,
     });
     const token = tokens[0];
+
+    // Validation
+    if (startAmount.isNaN() || startAmount == null || startAmount.lt(0)) {
+      throw new Error(`Starting price must be a number >= 0`);
+    }
+    if (!isEther && !token) {
+      throw new Error(`No ERC-20 token found for '${paymentToken}'`);
+    }
+    if (isEther && waitingForBestCounterOrder) {
+      throw new Error(
+        `English auctions must use wrapped ETH or an ERC-20 token.`
+      );
+    }
+    if (isEther && orderSide === OrderSide.Buy) {
+      throw new Error(`Offers must use wrapped ETH or an ERC-20 token.`);
+    }
+    if (priceDiff.lt(0)) {
+      throw new Error(
+        "End price must be less than or equal to the start price."
+      );
+    }
+    if (priceDiff.gt(0) && expirationTime.eq(0)) {
+      throw new Error(
+        "Expiration time must be set if order will change in price."
+      );
+    }
+    if (
+      englishAuctionReservePrice &&
+      !englishAuctionReservePrice.isZero() &&
+      !waitingForBestCounterOrder
+    ) {
+      throw new Error("Reserve prices may only be set on English auctions.");
+    }
+    if (
+      englishAuctionReservePrice &&
+      !englishAuctionReservePrice.isZero() &&
+      englishAuctionReservePrice < startAmount
+    ) {
+      throw new Error(
+        "Reserve price must be greater than or equal to the start amount."
+      );
+    }
+  }
+
+  private async _getPriceParametersCG(
+    orderSide: OrderSide,
+    tokenAddress: string,
+    expirationTime: BigNumber,
+    startAmount: BigNumber,
+    endAmount?: BigNumber,
+    waitingForBestCounterOrder = false,
+    englishAuctionReservePrice?: BigNumber
+  ) {
+    const priceDiff =
+      endAmount != null ? startAmount.minus(endAmount) : new BigNumber(0);
+    const paymentToken = tokenAddress.toLowerCase();
+    const isEther = tokenAddress == NULL_ADDRESS;
+    // const { tokens } = await this.api.getPaymentTokens({
+    //   address: paymentToken,
+    // });
+    // const token = tokens[0];
+    const token = {
+      address: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      decimals: 18,
+      eth_price: "1.000000000000000",
+      image_url:
+        "https://openseauserdata.com/files/accae6b6fb3888cbff27a013729c22dc.svg",
+      name: "Wrapped Ether",
+      symbol: "WETH",
+      // usd_price: "1184.250000000000000000",
+    };
 
     // Validation
     if (startAmount.isNaN() || startAmount == null || startAmount.lt(0)) {
