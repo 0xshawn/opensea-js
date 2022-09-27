@@ -393,7 +393,10 @@ export class OpenSeaAPI {
    */
   private async _fetch(apiPath: string, opts: RequestInit = {}) {
     const apiBase = this.apiBaseUrl;
-    const apiKey = this.apiKey;
+    let apiKey = this.apiKey;
+    if (apiPath.includes("/v2/orders/ethereum/seaport/listings")) {
+      apiKey = "";
+    }
     const finalUrl = apiBase + apiPath;
     const finalOpts = {
       ...opts,
