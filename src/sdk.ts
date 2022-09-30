@@ -203,7 +203,7 @@ export class OpenSeaSDK {
     this.ethersProvider = new providers.Web3Provider(
       provider as providers.ExternalProvider
     );
-    this.seaport = new Seaport(this.ethersProvider, {
+    this.seaport = new Seaport(this.ethersProvider as any, {
       conduitKeyToConduit: CONDUIT_KEYS_TO_CONDUIT,
       overrides: {
         defaultConduitKey: CROSS_CHAIN_DEFAULT_CONDUIT_KEY,
@@ -772,7 +772,7 @@ export class OpenSeaSDK {
    * @param options.expirationTime Expiration time for the order, in seconds
    * @param options.paymentTokenAddress Optional address for using an ERC-20 token in the order. If unspecified, defaults to WETH
    */
-  public async createBuyOrderOrigin({
+  public async createBuyOrder({
     asset,
     accountAddress,
     startAmount,
@@ -788,74 +788,6 @@ export class OpenSeaSDK {
     quantity?: BigNumberInput;
     domain?: string;
     salt?: string;
-    expirationTime?: BigNumberInput;
-    paymentTokenAddress?: string;
-  }): Promise<OrderV2> {
-    if (!asset.tokenId) {
-      throw new Error("Asset must have a tokenId");
-    }
-    paymentTokenAddress =
-      paymentTokenAddress ?? WETH_ADDRESS_BY_NETWORK[this._networkName];
-
-    const openseaAsset = await this.api.getAsset(asset);
-    const considerationAssetItems = this.getAssetItems(
-      [openseaAsset],
-      [makeBigNumber(quantity)]
-    );
-
-    const { basePrice } = await this._getPriceParameters(
-      OrderSide.Buy,
-      paymentTokenAddress,
-      makeBigNumber(expirationTime ?? getMaxOrderExpirationTimestamp()),
-      makeBigNumber(startAmount)
-    );
-
-    const { openseaSellerFee, collectionSellerFees: collectionSellerFees } =
-      await this.getFees({
-        openseaAsset,
-        paymentTokenAddress,
-        startAmount: basePrice,
-      });
-    const considerationFeeItems = [openseaSellerFee, ...collectionSellerFees];
-
-    const { executeAllActions } = await this.seaport.createOrder(
-      {
-        offer: [
-          {
-            token: paymentTokenAddress,
-            amount: basePrice.toString(),
-          },
-        ],
-        consideration: [...considerationAssetItems, ...considerationFeeItems],
-        endTime:
-          expirationTime?.toString() ??
-          getMaxOrderExpirationTimestamp().toString(),
-        zone: DEFAULT_ZONE_BY_NETWORK[this._networkName],
-        domain,
-        salt,
-        restrictedByZone: true,
-        allowPartialFills: true,
-      },
-      accountAddress
-    );
-    const order = await executeAllActions();
-
-    return this.api.postOrder(order, { protocol: "seaport", side: "bid" });
-  }
-
-  public async createBuyOrder({
-    asset,
-    accountAddress,
-    startAmount,
-    quantity = 1,
-    expirationTime,
-    paymentTokenAddress,
-  }: {
-    asset: Asset;
-    accountAddress: string;
-    startAmount: BigNumberInput;
-    endAmount?: BigNumberInput;
-    quantity?: BigNumberInput;
     expirationTime?: BigNumberInput;
     paymentTokenAddress?: string;
   }): Promise<any> {
@@ -904,12 +836,16 @@ export class OpenSeaSDK {
           expirationTime?.toString() ??
           getMaxOrderExpirationTimestamp().toString(),
         zone: DEFAULT_ZONE_BY_NETWORK[this._networkName],
+        domain,
+        salt,
         restrictedByZone: true,
         allowPartialFills: true,
       },
       accountAddress
     );
     return { actions, executeAllActions };
+    // const order = await executeAllActions();
+    // return this.api.postOrder(order, { protocol: "seaport", side: "bid" });
   }
 
   /**
@@ -1075,61 +1011,14 @@ export class OpenSeaSDK {
     order: OrderV2;
     accountAddress: string;
     recipientAddress?: string;
-  }): Promise<string> {
-    const isPrivateListing = !!order.taker;
-    if (isPrivateListing) {
-      if (recipientAddress) {
-        throw new Error(
-          "Private listings cannot be fulfilled with a recipient address"
-        );
-      }
-      return this.fulfillPrivateOrder({
-        order,
-        accountAddress,
-      });
-    }
-
-    let transactionHash: string;
-    switch (order.protocolAddress) {
-      case CROSS_CHAIN_SEAPORT_ADDRESS: {
-        const { executeAllActions } = await this.seaport.fulfillOrder({
-          order: order.protocolData,
-          accountAddress,
-          recipientAddress,
-        });
-        const transaction = await executeAllActions();
-        transactionHash = transaction.hash;
-        break;
-      }
-      default:
-        throw new Error("Unsupported protocol");
-    }
-
-    await this._confirmTransaction(
-      transactionHash,
-      EventType.MatchOrders,
-      "Fulfilling order"
-    );
-    return transactionHash;
-  }
-
-  public async fulfillOrderCG({
-    order,
-    accountAddress,
-    recipientAddress,
-  }: {
-    order: OrderV2;
-    accountAddress: string;
-    recipientAddress?: string;
   }): Promise<any> {
     switch (order.protocolAddress) {
       case CROSS_CHAIN_SEAPORT_ADDRESS: {
-        const { actions, executeAllActions } = await this.seaport.fulfillOrder({
+        return await this.seaport.fulfillOrder({
           order: order.protocolData,
           accountAddress,
           recipientAddress,
         });
-        return { actions, executeAllActions };
       }
       default:
         throw new Error("Unsupported protocol");
@@ -3382,67 +3271,6 @@ export class OpenSeaSDK {
    * @param endAmount The end value for the order, in the token's main units (e.g. ETH instead of wei). If unspecified, the order's `extra` attribute will be 0
    */
   private async _getPriceParameters(
-    orderSide: OrderSide,
-    tokenAddress: string,
-    expirationTime: BigNumber,
-    startAmount: BigNumber,
-    endAmount?: BigNumber,
-    waitingForBestCounterOrder = false,
-    englishAuctionReservePrice?: BigNumber
-  ): Promise<any> {
-    const priceDiff =
-      endAmount != null ? startAmount.minus(endAmount) : new BigNumber(0);
-    const paymentToken = tokenAddress.toLowerCase();
-    const isEther = tokenAddress == NULL_ADDRESS;
-    const { tokens } = await this.api.getPaymentTokens({
-      address: paymentToken,
-    });
-    const token = tokens[0];
-
-    // Validation
-    if (startAmount.isNaN() || startAmount == null || startAmount.lt(0)) {
-      throw new Error(`Starting price must be a number >= 0`);
-    }
-    if (!isEther && !token) {
-      throw new Error(`No ERC-20 token found for '${paymentToken}'`);
-    }
-    if (isEther && waitingForBestCounterOrder) {
-      throw new Error(
-        `English auctions must use wrapped ETH or an ERC-20 token.`
-      );
-    }
-    if (isEther && orderSide === OrderSide.Buy) {
-      throw new Error(`Offers must use wrapped ETH or an ERC-20 token.`);
-    }
-    if (priceDiff.lt(0)) {
-      throw new Error(
-        "End price must be less than or equal to the start price."
-      );
-    }
-    if (priceDiff.gt(0) && expirationTime.eq(0)) {
-      throw new Error(
-        "Expiration time must be set if order will change in price."
-      );
-    }
-    if (
-      englishAuctionReservePrice &&
-      !englishAuctionReservePrice.isZero() &&
-      !waitingForBestCounterOrder
-    ) {
-      throw new Error("Reserve prices may only be set on English auctions.");
-    }
-    if (
-      englishAuctionReservePrice &&
-      !englishAuctionReservePrice.isZero() &&
-      englishAuctionReservePrice < startAmount
-    ) {
-      throw new Error(
-        "Reserve price must be greater than or equal to the start amount."
-      );
-    }
-  }
-
-  private async _getPriceParametersCG(
     orderSide: OrderSide,
     tokenAddress: string,
     expirationTime: BigNumber,
