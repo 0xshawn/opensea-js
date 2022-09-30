@@ -386,7 +386,11 @@ export class OpenSeaAPI {
   private async _fetch(apiPath: string, opts: RequestInit = {}) {
     const apiBase = this.apiBaseUrl;
     let apiKey = this.apiKey;
-    if (apiPath.includes("/v2/orders/ethereum/seaport/listings")) {
+    // Remove api key from some GET request
+    if (opts.method === undefined) {
+      apiKey = "";
+    }
+    if ((opts.method || "").toLowerCase() === "get") {
       apiKey = "";
     }
     const finalUrl = apiBase + apiPath;
