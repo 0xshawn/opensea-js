@@ -21,6 +21,7 @@ import {
   serializeOrdersQueryOptions,
   getOrdersAPIPath,
   deserializeOrder,
+  deserializeOrderV1,
 } from "./orders/utils";
 import {
   Network,
@@ -103,6 +104,24 @@ export class OpenSeaAPI {
       throw new Error("Not found: no matching order found");
     }
     return deserializeOrder(orders[0]);
+  }
+
+  /**
+   * Gets an order from API based on query options. Throws when no order is found.
+   */
+  public async getOrderV1({
+    assetContractAddress,
+    tokenId,
+  }: any): Promise<OrderV2> {
+    const data: any = await this.get(
+      `/api/v1/asset/${assetContractAddress}/${tokenId}/`,
+      { include_orders: true }
+    );
+    const orders = data.seaport_sell_orders;
+    if (orders.length === 0) {
+      throw new Error("Not found: no matching order found");
+    }
+    return deserializeOrderV1(orders[0]);
   }
 
   /**
@@ -386,7 +405,15 @@ export class OpenSeaAPI {
    */
   private async _fetch(apiPath: string, opts: RequestInit = {}) {
     const apiBase = this.apiBaseUrl;
-    const apiKey = this.apiKey;
+    // const apiKey = this.apiKey;
+    let apiKey = this.apiKey;
+    // Remove api key from some GET request
+    if (opts.method === undefined) {
+      apiKey = "";
+    }
+    if ((opts.method || "").toLowerCase() === "get") {
+      apiKey = "";
+    }
     const finalUrl = apiBase + apiPath;
     const finalOpts = {
       ...opts,

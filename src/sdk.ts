@@ -801,7 +801,7 @@ export class OpenSeaSDK {
     salt?: string;
     expirationTime?: BigNumberInput;
     paymentTokenAddress?: string;
-  }): Promise<OrderV2> {
+  }): Promise<any> {
     if (!asset.tokenId) {
       throw new Error("Asset must have a tokenId");
     }
@@ -832,7 +832,7 @@ export class OpenSeaSDK {
       ...collectionSellerFees,
     ];
 
-    const { executeAllActions } = await this.seaport_v1_4.createOrder(
+    const { actions, executeAllActions } = await this.seaport_v1_4.createOrder(
       {
         offer: [
           {
@@ -852,13 +852,7 @@ export class OpenSeaSDK {
       },
       accountAddress
     );
-    const order = await executeAllActions();
-
-    return this.api.postOrder(order, {
-      protocol: "seaport",
-      protocolAddress: CROSS_CHAIN_SEAPORT_V1_4_ADDRESS,
-      side: "bid",
-    });
+    return { actions, executeAllActions };
   }
 
   /**
@@ -1038,7 +1032,7 @@ export class OpenSeaSDK {
     accountAddress: string;
     recipientAddress?: string;
     domain?: string;
-  }): Promise<string> {
+  }): Promise<any> {
     if (
       !(
         order.protocolAddress in
@@ -1066,20 +1060,12 @@ export class OpenSeaSDK {
       order.protocolAddress === CROSS_CHAIN_SEAPORT_ADDRESS
         ? this.seaport
         : this.seaport_v1_4;
-    const { executeAllActions } = await seaport.fulfillOrder({
+    return await seaport.fulfillOrder({
       order: order.protocolData,
       accountAddress,
       recipientAddress,
       domain,
     });
-    const transaction = await executeAllActions();
-
-    await this._confirmTransaction(
-      transaction.hash,
-      EventType.MatchOrders,
-      "Fulfilling order"
-    );
-    return transaction.hash;
   }
 
   /**
