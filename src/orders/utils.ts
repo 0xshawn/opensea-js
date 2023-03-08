@@ -121,3 +121,34 @@ export const deserializeOrder = (order: SerializedOrderV2): OrderV2 => {
     takerAssetBundle: assetBundleFromJSON(order.taker_asset_bundle),
   };
 };
+
+export const deserializeOrderV1 = (order: any): any => {
+  return {
+    createdDate: order.created_date,
+    closingDate: order.closing_date,
+    listingTime: order.listing_time,
+    expirationTime: order.expiration_time,
+    orderHash: order.order_hash,
+    maker: accountFromJSON(order.maker),
+    taker: order.taker ? accountFromJSON(order.taker) : null,
+    protocolData: order.protocol_data,
+    protocolAddress: order.protocol_address,
+    currentPrice: order.current_price,
+    makerFees: order.maker_fees.map(({ account, basis_points }: any) => ({
+      account: accountFromJSON(account),
+      basisPoints: basis_points,
+    })),
+    takerFees: order.taker_fees.map(({ account, basis_points }: any) => ({
+      account: accountFromJSON(account),
+      basisPoints: basis_points,
+    })),
+    side: order.side,
+    orderType: order.order_type,
+    cancelled: order.cancelled,
+    finalized: order.finalized,
+    markedInvalid: order.marked_invalid,
+    clientSignature: order.client_signature,
+    makerAssetBundle: null,
+    takerAssetBundle: null,
+  };
+};
