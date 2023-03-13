@@ -512,6 +512,9 @@ export class OpenSeaAPI {
     if ((opts.method || "").toLowerCase() === "get") {
       apiKey = "";
     }
+    if (apiPath.includes("/v2/orders/ethereum/seaport/listings")) {
+      apiKey = this.apiKey;
+    }
     const finalUrl = apiBase + apiPath;
     const finalOpts = {
       ...opts,
