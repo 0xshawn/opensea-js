@@ -34,7 +34,7 @@
   },
   "types": "lib/index.d.ts",
   "dependencies": {
-    "@opensea/seaport-js": "https://github.com/CG-INC/seaport-js/releases/download/v1.0.10_m20230304/opensea-seaport-js-1.0.10.tgz",
+    "@opensea/seaport-js": "https://github.com/CG-INC/seaport-js/releases/download/v1.0.10_m20230313/opensea-seaport-js-1.0.10.tgz",
     "ajv": "^8.11.0",
     "axios": "^1.3.4",
     "bignumber.js": "9.0.2",
